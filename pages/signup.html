@@ -338,56 +338,31 @@
         </div>`;
     }
 
-    async function pollReady(name, status) {
-      const termUrl = `https://learn-${name}.bp31app.com`;
-      const maxAttempts = 40; // ~2 minutes at 3s intervals
-      let attempt = 0;
-
-      // Simulate the provisioning stages with timing
-      status.innerHTML = renderProgress('provision', false);
-
-      const deployTimeout = setTimeout(() => {
-        status.innerHTML = renderProgress('deploy', false);
-      }, 8000);
-
-      while (attempt < maxAttempts) {
-        attempt++;
-        await new Promise(r => setTimeout(r, 3000));
-        try {
-          const res = await fetch(termUrl, { method: 'HEAD', mode: 'no-cors' });
-          // mode: no-cors means we can't read status, but if it doesn't throw, the server responded
-          // Switch to checking with a different approach
-        } catch (e) {
-          // Network error = not ready yet
-          continue;
-        }
-        // If fetch didn't throw, server is responding (could be 200 or other)
-        // Try an actual request to confirm
-        try {
-          const check = await fetch(termUrl, { mode: 'cors' });
-          if (check.ok) {
-            clearTimeout(deployTimeout);
+        function showReady(name, status) {
+            const termUrl = `https://learn-${name}.bp31app.com`;
             status.className = 'status success';
             status.innerHTML = renderProgress('ready', true) + `
-              <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
-              <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
+                <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
+                <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
+                <p style="margin-top:0.75rem;font-size:0.8rem;color:var(--muted)">
+                    If the terminal isn't ready yet, refresh in a moment.
+                </p>
             `;
-            return;
-          }
-        } catch (e) { /* cross-origin, keep polling */ }
-      }
+        }
 
-      // Timeout — show links anyway
-      clearTimeout(deployTimeout);
-      status.className = 'status success';
-      status.innerHTML = renderProgress('ready', true) + `
-        <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
-        <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:var(--muted)">
-          If the terminal isn't ready yet, refresh in a moment.
-        </p>
-      `;
-    }
+        function animateProgress(name, status) {
+            // 'submit' step is already showing from the form handler.
+            // These timers are relative to POST success:
+            setTimeout(() => {
+                status.innerHTML = renderProgress('provision', false);
+            }, 3000);
+            setTimeout(() => {
+                status.innerHTML = renderProgress('deploy', false);
+            }, 12000);
+            setTimeout(() => {
+                showReady(name, status);
+            }, 45000);
+        }
 
     document.getElementById('signup').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -412,7 +387,7 @@
           const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
           localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: clean, timestamp: Date.now() }));
           document.getElementById('signup').style.display = 'none';
-          pollReady(clean, status);
+          animateProgress(clean, status);
         } else {
           throw new Error('Provisioning failed — please try again.');
         }
