@@ -125,6 +125,10 @@ func newPublicHandler(webhookUpstream string) http.Handler {
 		proxy.ServeHTTP(w, r)
 	})
 
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
+
 	return mux
 }
 

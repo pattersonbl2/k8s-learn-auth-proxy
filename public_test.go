@@ -169,3 +169,18 @@ func TestPublicServesSignupOnDefaultHost(t *testing.T) {
 		t.Fatal("default host should serve signup page")
 	}
 }
+
+func TestPublicHealthz(t *testing.T) {
+	handler := newPublicHandler("http://localhost:9999")
+
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if w.Body.String() != "ok" {
+		t.Fatalf("expected body 'ok', got %q", w.Body.String())
+	}
+}
