@@ -192,8 +192,22 @@
       padding: 1.25rem;
       z-index: 1000;
       box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      position: relative;
     }
     .help-box.open { display: block; }
+    .help-close {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.75rem;
+        background: none;
+        border: none;
+        color: var(--muted);
+        font-size: 1.1rem;
+        cursor: pointer;
+        padding: 0.25rem;
+        line-height: 1;
+    }
+    .help-close:hover { color: var(--text); }
     .help-box h3 {
       font-size: 0.95rem;
       margin-bottom: 0.75rem;
@@ -441,6 +455,7 @@ kubectl rollout history deployment/myapp</code></pre>
   </footer>
   <button class="help-btn" id="helpBtn" title="Ask for help">?</button>
   <div class="help-box" id="helpBox">
+    <button class="help-close" id="helpClose" title="Close">&times;</button>
     <h3>Ask about the tasks</h3>
     <input class="help-input" id="helpInput" type="text" placeholder="e.g. Why is my pod stuck in Pending?" maxlength="200" />
     <button class="help-submit" id="helpSubmit">Ask</button>
@@ -457,6 +472,16 @@ kubectl rollout history deployment/myapp</code></pre>
     helpBtn.addEventListener('click', () => {
       helpBox.classList.toggle('open');
       if (helpBox.classList.contains('open')) helpInput.focus();
+    });
+
+    document.getElementById('helpClose').addEventListener('click', () => {
+        helpBox.classList.remove('open');
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && helpBox.classList.contains('open')) {
+            helpBox.classList.remove('open');
+        }
     });
 
     async function askHelp() {
