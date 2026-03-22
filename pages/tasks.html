@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>K8s Learning Tasks</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap');
+    :root {
+      --bg: #0a0e14;
+      --surface: #111820;
+      --border: #1e2a3a;
+      --accent: #22d3ee;
+      --accent-dim: #0e9ab5;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --text: #c9d1d9;
+      --muted: #6b7b8d;
+      --code-bg: #0d1117;
+      --code-border: #1e2a3a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+      pointer-events: none;
+      z-index: 9999;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    header .logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    header h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+    header h1::after { content: '_'; animation: blink 1s step-end infinite; color: var(--accent); }
+    @keyframes blink { 50% { opacity: 0; } }
+    header p { color: var(--muted); font-size: 0.9rem; margin-top: 0.1rem; }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+    .intro {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 2px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .intro p { color: var(--muted); margin-top: 0.4rem; font-size: 0.95rem; }
+    .task {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+    .task-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .task-num {
+      width: 36px; height: 36px;
+      background: transparent;
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+    }
+    .task-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .task-goal {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 0.2rem;
+    }
+    .task-body { padding: 1.25rem 1.5rem; }
+    .task-body p { color: var(--muted); margin-bottom: 1rem; font-size: 0.95rem; }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: 2px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      position: relative;
+    }
+    pre code {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.875rem;
+      line-height: 1.7;
+      color: #c9d1d9;
+    }
+    .comment { color: #6e7681; }
+    .cmd { color: #79c0ff; }
+    .tip {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 2px;
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+      color: var(--green);
+      margin-top: 0.75rem;
+    }
+    .tip strong { font-weight: 600; }
+    .warning {
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      border-radius: 2px;
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+      color: var(--yellow);
+      margin-top: 0.75rem;
+    }
+    .placeholder {
+      background: rgba(34, 211, 238, 0.1);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      color: var(--accent);
+      border-radius: 4px;
+      padding: 0.1rem 0.4rem;
+      font-family: monospace;
+      font-size: 0.85em;
+    }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+      padding: 2rem;
+      border-top: 1px solid var(--border);
+      margin-top: 1rem;
+    }
+    .help-btn {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      width: 48px;
+      height: 48px;
+      background: var(--accent);
+      border: none;
+      border-radius: 50%;
+      color: #fff;
+      font-size: 1.4rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      z-index: 1000;
+      transition: opacity 0.15s;
+    }
+    .help-btn:hover { opacity: 0.85; }
+    .help-box {
+      display: none;
+      position: fixed;
+      bottom: 5rem;
+      right: 1.5rem;
+      width: 340px;
+      max-width: calc(100vw - 3rem);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 1.25rem;
+      z-index: 1000;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .help-box.open { display: block; }
+    .help-box h3 {
+      font-size: 0.95rem;
+      margin-bottom: 0.75rem;
+      color: var(--text);
+    }
+    .help-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.9rem;
+      padding: 0.5rem 0.75rem;
+      outline: none;
+      margin-bottom: 0.5rem;
+    }
+    .help-input:focus { border-color: var(--accent); }
+    .help-input::placeholder { color: #4a5568; }
+    .help-submit {
+      width: 100%;
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.5rem;
+    }
+    .help-submit:hover:not(:disabled) { opacity: 0.85; }
+    .help-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .help-answer {
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.5;
+      display: none;
+    }
+    .help-answer.visible { display: block; }
+    .help-spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 480px) {
+      .help-box { width: calc(100vw - 2rem); right: 1rem; bottom: 4.5rem; }
+      .help-btn { bottom: 1rem; right: 1rem; width: 42px; height: 42px; font-size: 1.2rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">&gt;_</div>
+    <div>
+      <h1>K8s Learning Lab</h1>
+      <p>Five hands-on tasks to learn Kubernetes — run them in your terminal above</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="intro">
+      <strong>Your environment is ready.</strong>
+      <p>
+        Open your terminal at <strong>learn-[name].bp31app.com</strong> and work through the tasks below.
+        Replace <span class="placeholder">[name]</span> with your username wherever you see it.
+        Everything you do is scoped to your own namespace — you can't break anything outside it.
+      </p>
+    </div>
+
+    <!-- Task 1 -->
+    <div class="task">
+      <div class="task-header">
+        <div class="task-num">1</div>
+        <div>
+          <div class="task-title">Run your first Pod</div>
+          <div class="task-goal">Goal: understand Pods — the smallest deployable unit in Kubernetes</div>
+        </div>
+      </div>
+      <div class="task-body">
+        <p>A Pod is one or more containers running together. Start a simple nginx container.</p>
+        <pre><code><span class="comment"># Start a one-shot pod</span>
+kubectl run hello --image=nginx --restart=Never
+
+<span class="comment"># Watch it start up</span>
+kubectl get pods
+
+<span class="comment"># Read its logs</span>
+kubectl logs hello
+
+<span class="comment"># Inspect the pod in detail</span>
+kubectl describe pod hello</code></pre>
+        <div class="tip">
+          <strong>What you learned:</strong> Pods are ephemeral. If it crashes, it's gone.
+          That's why real workloads use Deployments (Task 2).
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 2 -->
+    <div class="task">
+      <div class="task-header">
+        <div class="task-num">2</div>
+        <div>
+          <div class="task-title">Create a Deployment</div>
+          <div class="task-goal">Goal: understand Deployments — self-healing, declarative pod management</div>
+        </div>
+      </div>
+      <div class="task-body">
+        <p>A Deployment tells Kubernetes "I always want 3 replicas of this app". K8s will keep that true — even if pods crash.</p>
+        <pre><code><span class="comment"># Create a deployment with 3 replicas</span>
+kubectl create deployment myapp --image=nginx --replicas=3
+
+<span class="comment"># Check the deployment</span>
+kubectl get deployments
+
+<span class="comment"># See the pods it manages</span>
+kubectl get pods -l app=myapp
+
+<span class="comment"># Delete a pod and watch it get recreated</span>
+kubectl delete pod &lt;one-of-the-pod-names&gt;
+kubectl get pods -l app=myapp</code></pre>
+        <div class="tip">
+          <strong>What you learned:</strong> Deployments manage a ReplicaSet which manages Pods.
+          Deleting a Pod doesn't kill the app — the Deployment respawns it.
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 3 -->
+    <div class="task">
+      <div class="task-header">
+        <div class="task-num">3</div>
+        <div>
+          <div class="task-title">Expose with a Service</div>
+          <div class="task-goal">Goal: understand Services — stable network endpoints for pods</div>
+        </div>
+      </div>
+      <div class="task-body">
+        <p>Pods get random IPs that change on restart. A Service gives you a stable name and load-balances across all pods.</p>
+        <pre><code><span class="comment"># Create a ClusterIP service for myapp</span>
+kubectl expose deployment myapp --port=80 --type=ClusterIP
+
+<span class="comment"># See the service and its cluster IP</span>
+kubectl get svc
+
+<span class="comment"># Hit the service from inside the cluster</span>
+kubectl run test --image=busybox --rm -it --restart=Never \
+  -- wget -qO- http://myapp
+
+<span class="comment"># Kubernetes also provides DNS — same request via name</span>
+kubectl run test --image=busybox --rm -it --restart=Never \
+  -- wget -qO- http://myapp.learn-<span class="placeholder">[name]</span>.svc.cluster.local</code></pre>
+        <div class="tip">
+          <strong>What you learned:</strong> Services provide stable DNS names and load balance
+          across all matching pods. ClusterIP = cluster-internal only.
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 4 -->
+    <div class="task">
+      <div class="task-header">
+        <div class="task-num">4</div>
+        <div>
+          <div class="task-title">Deploy to the internet</div>
+          <div class="task-goal">Goal: understand Ingress — routing external HTTP traffic into your cluster</div>
+        </div>
+      </div>
+      <div class="task-body">
+        <p>
+          An Ingress connects a public hostname to a Service.
+          Your subdomain <strong>learn-<span class="placeholder">[name]</span>-app.bp31app.com</strong> is already wired up — just create the Ingress rule.
+        </p>
+        <pre><code><span class="comment"># Create an Ingress to expose myapp to the internet</span>
+kubectl create ingress myapp \
+  --rule="learn-<span class="placeholder">[name]</span>-app.bp31app.com/*=myapp:80"
+
+<span class="comment"># Check the ingress was created</span>
+kubectl get ingress
+
+<span class="comment"># Wait ~30 seconds, then visit your URL:</span>
+<span class="comment"># https://learn-[name]-app.bp31app.com</span></code></pre>
+        <div class="tip">
+          <strong>What you learned:</strong> Traefik (the ingress controller) watches for Ingress
+          resources and automatically routes traffic. Real traffic, real internet, your deployment.
+        </div>
+        <div class="warning">
+          <strong>Replace <span class="placeholder">[name]</span></strong> with your actual username in both the command and the URL.
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 5 -->
+    <div class="task">
+      <div class="task-header">
+        <div class="task-num">5</div>
+        <div>
+          <div class="task-title">Scale and observe</div>
+          <div class="task-goal">Goal: understand scaling, rolling updates, and self-healing</div>
+        </div>
+      </div>
+      <div class="task-body">
+        <p>Kubernetes makes horizontal scaling trivial. Watch it happen in real-time.</p>
+        <pre><code><span class="comment"># Scale up to 5 replicas</span>
+kubectl scale deployment myapp --replicas=5
+
+<span class="comment"># Watch pods spin up in real-time (Ctrl+C to stop)</span>
+kubectl get pods -w
+
+<span class="comment"># Check rollout status</span>
+kubectl rollout status deployment/myapp
+
+<span class="comment"># Scale back down</span>
+kubectl scale deployment myapp --replicas=1
+
+<span class="comment"># Update the image (triggers a rolling update)</span>
+kubectl set image deployment/myapp nginx=nginx:alpine
+
+<span class="comment"># Watch the rolling update</span>
+kubectl rollout status deployment/myapp
+
+<span class="comment"># See rollout history</span>
+kubectl rollout history deployment/myapp</code></pre>
+        <div class="tip">
+          <strong>What you learned:</strong> Rolling updates replace pods one by one with zero downtime.
+          <code>kubectl rollout undo</code> rolls back if something goes wrong.
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    Your environment is scoped to namespace <strong>learn-[name]</strong> and will be cleaned up after 24 hours.
+  </footer>
+  <button class="help-btn" id="helpBtn" title="Ask for help">?</button>
+  <div class="help-box" id="helpBox">
+    <h3>Ask about the tasks</h3>
+    <input class="help-input" id="helpInput" type="text" placeholder="e.g. Why is my pod stuck in Pending?" maxlength="200" />
+    <button class="help-submit" id="helpSubmit">Ask</button>
+    <div class="help-answer" id="helpAnswer"></div>
+  </div>
+
+  <script>
+    const helpBtn = document.getElementById('helpBtn');
+    const helpBox = document.getElementById('helpBox');
+    const helpInput = document.getElementById('helpInput');
+    const helpSubmit = document.getElementById('helpSubmit');
+    const helpAnswer = document.getElementById('helpAnswer');
+
+    helpBtn.addEventListener('click', () => {
+      helpBox.classList.toggle('open');
+      if (helpBox.classList.contains('open')) helpInput.focus();
+    });
+
+    async function askHelp() {
+      const q = helpInput.value.trim();
+      if (q.length < 10) {
+        helpAnswer.textContent = 'Please ask a question with at least 10 characters.';
+        helpAnswer.classList.add('visible');
+        return;
+      }
+      helpSubmit.disabled = true;
+      helpSubmit.innerHTML = '<span class="help-spinner"></span>Thinking...';
+      helpAnswer.classList.remove('visible');
+
+      try {
+        const res = await fetch('/webhook/k8s-learn-help', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q })
+        });
+        if (res.status === 429) {
+          helpAnswer.textContent = 'Slow down, try again in a moment.';
+        } else if (res.ok) {
+          const data = await res.json();
+          helpAnswer.textContent = data.answer || 'No response.';
+        } else {
+          helpAnswer.textContent = 'Something went wrong. Try again.';
+        }
+      } catch (err) {
+        helpAnswer.textContent = 'Could not reach the help assistant. Try again later.';
+      }
+      helpAnswer.classList.add('visible');
+      helpSubmit.disabled = false;
+      helpSubmit.textContent = 'Ask';
+    }
+
+    helpSubmit.addEventListener('click', askHelp);
+    helpInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') askHelp();
+    });
+  </script>
+</body>
+</html>

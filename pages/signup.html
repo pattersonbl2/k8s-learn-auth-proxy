@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>K8s Learning Lab — Sign Up</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap');
+
+    :root {
+      --bg: #0a0e14;
+      --surface: #111820;
+      --border: #1e2a3a;
+      --accent: #22d3ee;
+      --green: #34d399;
+      --red: #f87171;
+      --text: #c9d1d9;
+      --muted: #6b7b8d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.03) 2px,
+        rgba(0, 0, 0, 0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 420px;
+    }
+    .logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 2rem;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+    h1::after {
+      content: '_';
+      animation: blink 1s step-end infinite;
+      color: var(--accent);
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; line-height: 1.5; }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+    input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: 'IBM Plex Sans', sans-serif;
+      padding: 0.65rem 0.9rem;
+      margin-bottom: 1.2rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus { border-color: var(--accent); }
+    input::placeholder { color: #4a5568; }
+    button {
+      width: 100%;
+      background: var(--accent);
+      border: none;
+      border-radius: 3px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 600;
+      padding: 0.75rem;
+      transition: opacity 0.15s;
+    }
+    button:hover:not(:disabled) { opacity: 0.85; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .hint {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-top: -0.8rem;
+      margin-bottom: 1.2rem;
+    }
+    .status {
+      margin-top: 1.25rem;
+      border-radius: 2px;
+      padding: 1rem 1.2rem;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .status.success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--green);
+      display: block;
+    }
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--red);
+      display: block;
+    }
+    .status.provisioning {
+      background: rgba(34, 211, 238, 0.08);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      color: var(--text);
+      display: block;
+    }
+    .status a { font-weight: 600; }
+    .status .ready-link { color: #fff; }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(34, 211, 238, 0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .progress-wrap {
+      margin-top: 1rem;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 0.75rem;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.6s ease;
+    }
+    .progress-fill.done {
+      background: var(--green);
+    }
+    .steps {
+      list-style: none;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .steps li {
+      padding: 0.3rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .steps li .icon {
+      width: 18px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .steps li.active { color: var(--text); }
+    .steps li.done { color: var(--green); }
+    .steps li.active .icon::after {
+      content: '';
+      display: inline-block;
+      width: 10px; height: 10px;
+      border: 2px solid var(--accent);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    .ready-link {
+      display: inline-block;
+      margin-top: 1rem;
+      background: var(--green);
+      color: #fff;
+      text-decoration: none;
+      padding: 0.6rem 1.2rem;
+      border-radius: 3px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: opacity 0.15s;
+    }
+    .ready-link:hover { opacity: 0.85; }
+    .task-link {
+      display: inline-block;
+      margin-top: 0.5rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+    }
+    .task-link:hover { color: var(--text); }
+    .welcome-back-note {
+      margin-top: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .welcome-back-note a {
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">&gt;_</div>
+    <h1>K8s Learning Lab</h1>
+    <p class="subtitle">Get your own isolated Kubernetes environment — ready in under a minute.</p>
+
+    <form id="signup">
+      <label for="name">Username</label>
+      <input id="name" type="text" placeholder="e.g. alice" autocomplete="off" required />
+      <p class="hint">Lowercase letters and numbers only, max 20 chars.</p>
+
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="you@example.com" required />
+
+      <button type="submit" id="btn">Get my environment</button>
+    </form>
+
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    const WEBHOOK_URL = '/webhook/k8s-learn-signup';
+    const STORAGE_KEY = 'k8s-learn-user';
+
+    // On load: if user already signed up, redirect to their terminal
+    (function checkExistingSession() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const saved = raw ? raw.replace(/[^a-z0-9]/g, '').slice(0, 20) : null;
+      if (saved && saved.length >= 2) {
+        const termUrl = `https://learn-${saved}.bp31app.com`;
+        const card = document.querySelector('.card');
+        card.innerHTML = `
+          <div class="logo">&gt;_</div>
+          <h1>Welcome back</h1>
+          <p class="subtitle">Your environment is ready.</p>
+          <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
+          <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
+          <p class="welcome-back-note">
+            Not you? <a href="#" onclick="localStorage.removeItem('${STORAGE_KEY}');location.reload();return false;">Start over</a>
+          </p>
+        `;
+      }
+    })();
+
+    const STEPS = [
+      { id: 'submit', label: 'Submitting request' },
+      { id: 'provision', label: 'Creating namespace & RBAC' },
+      { id: 'deploy', label: 'Deploying terminal' },
+      { id: 'ready', label: 'Environment ready' }
+    ];
+
+    function renderProgress(currentStep, done) {
+      const pct = done ? 100 : Math.min(95, ((STEPS.findIndex(s => s.id === currentStep) + 0.5) / STEPS.length) * 100);
+      const fillClass = done ? 'progress-fill done' : 'progress-fill';
+      const stepsHtml = STEPS.map(s => {
+        const idx = STEPS.findIndex(x => x.id === s.id);
+        const curIdx = STEPS.findIndex(x => x.id === currentStep);
+        let cls = '';
+        let icon = '<span class="icon"></span>';
+        if (done || idx < curIdx) {
+          cls = 'done';
+          icon = '<span class="icon">&#10003;</span>';
+        } else if (idx === curIdx && !done) {
+          cls = 'active';
+          icon = '<span class="icon"></span>';
+        }
+        return `<li class="${cls}">${icon} ${s.label}</li>`;
+      }).join('');
+
+      return `
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="${fillClass}" style="width:${pct}%"></div></div>
+          <ul class="steps">${stepsHtml}</ul>
+        </div>`;
+    }
+
+    async function pollReady(name, status) {
+      const termUrl = `https://learn-${name}.bp31app.com`;
+      const maxAttempts = 40; // ~2 minutes at 3s intervals
+      let attempt = 0;
+
+      // Simulate the provisioning stages with timing
+      status.innerHTML = renderProgress('provision', false);
+
+      const deployTimeout = setTimeout(() => {
+        status.innerHTML = renderProgress('deploy', false);
+      }, 8000);
+
+      while (attempt < maxAttempts) {
+        attempt++;
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const res = await fetch(termUrl, { method: 'HEAD', mode: 'no-cors' });
+          // mode: no-cors means we can't read status, but if it doesn't throw, the server responded
+          // Switch to checking with a different approach
+        } catch (e) {
+          // Network error = not ready yet
+          continue;
+        }
+        // If fetch didn't throw, server is responding (could be 200 or other)
+        // Try an actual request to confirm
+        try {
+          const check = await fetch(termUrl, { mode: 'cors' });
+          if (check.ok) {
+            clearTimeout(deployTimeout);
+            status.className = 'status success';
+            status.innerHTML = renderProgress('ready', true) + `
+              <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
+              <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
+            `;
+            return;
+          }
+        } catch (e) { /* cross-origin, keep polling */ }
+      }
+
+      // Timeout — show links anyway
+      clearTimeout(deployTimeout);
+      status.className = 'status success';
+      status.innerHTML = renderProgress('ready', true) + `
+        <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
+        <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:var(--muted)">
+          If the terminal isn't ready yet, refresh in a moment.
+        </p>
+      `;
+    }
+
+    document.getElementById('signup').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn');
+      const status = document.getElementById('status');
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Provisioning...';
+      status.className = 'status provisioning';
+      status.innerHTML = renderProgress('submit', false);
+
+      try {
+        const res = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email })
+        });
+
+        if (res.ok) {
+          const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
+          localStorage.setItem(STORAGE_KEY, clean);
+          document.getElementById('signup').style.display = 'none';
+          pollReady(clean, status);
+        } else {
+          throw new Error('Provisioning failed — please try again.');
+        }
+      } catch (err) {
+        status.className = 'status error';
+        status.innerHTML = '';
+        status.textContent = 'Error: ' + (err.message || 'Something went wrong. Try again.');
+        btn.disabled = false;
+        btn.textContent = 'Get my environment';
+      }
+    });
+  </script>
+</body>
+</html>
