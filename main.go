@@ -47,6 +47,8 @@ func runHashMode(outPath string) error {
 
 func main() {
 	hashMode := flag.Bool("hash", false, "Hash TERM_PASS env var and write to /auth/password-hash")
+	mode := flag.String("mode", "auth", "Server mode: 'auth' (sidecar) or 'public' (signup/tasks)")
+	webhookUpstream := flag.String("webhook-upstream", "http://192.168.50.97:80", "n8n webhook upstream URL")
 	flag.Parse()
 
 	if *hashMode {
@@ -57,20 +59,28 @@ func main() {
 		return
 	}
 
-	cfg := loadConfig()
-
-	// Generate cookie secret on startup
-	cookieSecret := generateSecret()
-	if err := os.WriteFile(cfg.CookieSecretPath, cookieSecret, 0600); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing cookie secret: %v\n", err)
+	switch *mode {
+	case "public":
+		handler := newPublicHandler(*webhookUpstream)
+		log.Printf("k8s-learn public mode listening on :8080, webhook-upstream=%s", *webhookUpstream)
+		if err := http.ListenAndServe(":8080", handler); err != nil {
+			log.Fatalf("server error: %v", err)
+		}
+	case "auth":
+		cfg := loadConfig()
+		cookieSecret := generateSecret()
+		if err := os.WriteFile(cfg.CookieSecretPath, cookieSecret, 0600); err != nil {
+			fmt.Fprintf(os.Stderr, "error writing cookie secret: %v\n", err)
+			os.Exit(1)
+		}
+		handler := newAuthHandler(cfg, cookieSecret)
+		log.Printf("k8s-learn auth mode listening on :8080, upstream=%s", cfg.Upstream)
+		if err := http.ListenAndServe(":8080", handler); err != nil {
+			log.Fatalf("server error: %v", err)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "unknown mode: %s (use 'auth' or 'public')\n", *mode)
 		os.Exit(1)
-	}
-
-	handler := newAuthHandler(cfg, cookieSecret)
-
-	log.Printf("auth-proxy listening on :8080, upstream=%s", cfg.Upstream)
-	if err := http.ListenAndServe(":8080", handler); err != nil {
-		log.Fatalf("server error: %v", err)
 	}
 }
 
