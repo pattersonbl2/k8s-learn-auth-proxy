@@ -255,24 +255,55 @@
     const WEBHOOK_URL = '/webhook/k8s-learn-signup';
     const STORAGE_KEY = 'k8s-learn-user';
 
+    const SESSION_MAX_AGE_MS = 23 * 60 * 60 * 1000; // 23 hours
+
     // On load: if user already signed up, redirect to their terminal
     (function checkExistingSession() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const saved = raw ? raw.replace(/[^a-z0-9]/g, '').slice(0, 20) : null;
-      if (saved && saved.length >= 2) {
-        const termUrl = `https://learn-${saved}.bp31app.com`;
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+
+        let session;
+        try {
+            session = JSON.parse(raw);
+        } catch (e) {
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+        }
+
+        // Migration: old format was a plain string, not an object
+        if (typeof session !== 'object' || !session.timestamp || !session.name) {
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+        }
+
+        const name = session.name.replace(/[^a-z0-9]/g, '').slice(0, 20);
+        if (name.length < 2) {
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+        }
+
+        // Check if session has expired (23h to account for drift vs 24h cleanup)
+        if (Date.now() - session.timestamp > SESSION_MAX_AGE_MS) {
+            localStorage.removeItem(STORAGE_KEY);
+            const status = document.getElementById('status');
+            status.className = 'status error';
+            status.style.display = 'block';
+            status.textContent = 'Your previous environment has expired. Sign up again to get a new one.';
+            return;
+        }
+
+        const termUrl = `https://learn-${name}.bp31app.com`;
         const card = document.querySelector('.card');
         card.innerHTML = `
-          <div class="logo">&gt;_</div>
-          <h1>Welcome back</h1>
-          <p class="subtitle">Your environment is ready.</p>
-          <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
-          <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
-          <p class="welcome-back-note">
+        <div class="logo">>_</div>
+        <h1>Welcome back</h1>
+        <p class="subtitle">Your environment is ready.</p>
+        <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
+        <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
+        <p class="welcome-back-note">
             Not you? <a href="#" onclick="localStorage.removeItem('${STORAGE_KEY}');location.reload();return false;">Start over</a>
-          </p>
-        `;
-      }
+        </p>
+    `;
     })();
 
     const STEPS = [
@@ -379,7 +410,7 @@
 
         if (res.ok) {
           const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
-          localStorage.setItem(STORAGE_KEY, clean);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: clean, timestamp: Date.now() }));
           document.getElementById('signup').style.display = 'none';
           pollReady(clean, status);
         } else {
