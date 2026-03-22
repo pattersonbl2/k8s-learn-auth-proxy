@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%230a0e14'/><text x='4' y='23' font-family='monospace' font-size='18' font-weight='bold' fill='%2322d3ee'>%3E_</text></svg>">
   <title>K8s Learning Tasks</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap');
@@ -193,6 +194,19 @@
       box-shadow: 0 8px 24px rgba(0,0,0,0.5);
     }
     .help-box.open { display: block; }
+    .help-close {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.75rem;
+        background: none;
+        border: none;
+        color: var(--muted);
+        font-size: 1.1rem;
+        cursor: pointer;
+        padding: 0.25rem;
+        line-height: 1;
+    }
+    .help-close:hover { color: var(--text); }
     .help-box h3 {
       font-size: 0.95rem;
       margin-bottom: 0.75rem;
@@ -440,6 +454,7 @@ kubectl rollout history deployment/myapp</code></pre>
   </footer>
   <button class="help-btn" id="helpBtn" title="Ask for help">?</button>
   <div class="help-box" id="helpBox">
+    <button class="help-close" id="helpClose" title="Close">&times;</button>
     <h3>Ask about the tasks</h3>
     <input class="help-input" id="helpInput" type="text" placeholder="e.g. Why is my pod stuck in Pending?" maxlength="200" />
     <button class="help-submit" id="helpSubmit">Ask</button>
@@ -456,6 +471,16 @@ kubectl rollout history deployment/myapp</code></pre>
     helpBtn.addEventListener('click', () => {
       helpBox.classList.toggle('open');
       if (helpBox.classList.contains('open')) helpInput.focus();
+    });
+
+    document.getElementById('helpClose').addEventListener('click', () => {
+        helpBox.classList.remove('open');
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && helpBox.classList.contains('open')) {
+            helpBox.classList.remove('open');
+        }
     });
 
     async function askHelp() {

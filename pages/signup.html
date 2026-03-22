@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%230a0e14'/><text x='4' y='23' font-family='monospace' font-size='18' font-weight='bold' fill='%2322d3ee'>%3E_</text></svg>">
   <title>K8s Learning Lab — Sign Up</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap');
@@ -228,6 +229,12 @@
     .welcome-back-note a {
       color: var(--accent);
     }
+    @media (max-width: 480px) {
+      .card { padding: 1.5rem; }
+      .logo { font-size: 1.6rem; }
+      h1 { font-size: 1.25rem; }
+      .subtitle { font-size: 0.9rem; }
+    }
   </style>
 </head>
 <body>
@@ -254,24 +261,55 @@
     const WEBHOOK_URL = '/webhook/k8s-learn-signup';
     const STORAGE_KEY = 'k8s-learn-user';
 
+    const SESSION_MAX_AGE_MS = 23 * 60 * 60 * 1000; // 23 hours
+
     // On load: if user already signed up, redirect to their terminal
     (function checkExistingSession() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const saved = raw ? raw.replace(/[^a-z0-9]/g, '').slice(0, 20) : null;
-      if (saved && saved.length >= 2) {
-        const termUrl = `https://learn-${saved}.bp31app.com`;
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+
+        let session;
+        try {
+            session = JSON.parse(raw);
+        } catch (e) {
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+        }
+
+        // Migration: old format was a plain string, not an object
+        if (typeof session !== 'object' || !session.timestamp || !session.name) {
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+        }
+
+        const name = session.name.replace(/[^a-z0-9]/g, '').slice(0, 20);
+        if (name.length < 2) {
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+        }
+
+        // Check if session has expired (23h to account for drift vs 24h cleanup)
+        if (Date.now() - session.timestamp > SESSION_MAX_AGE_MS) {
+            localStorage.removeItem(STORAGE_KEY);
+            const status = document.getElementById('status');
+            status.className = 'status error';
+            status.style.display = 'block';
+            status.textContent = 'Your previous environment has expired. Sign up again to get a new one.';
+            return;
+        }
+
+        const termUrl = `https://learn-${name}.bp31app.com`;
         const card = document.querySelector('.card');
         card.innerHTML = `
-          <div class="logo">&gt;_</div>
-          <h1>Welcome back</h1>
-          <p class="subtitle">Your environment is ready.</p>
-          <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
-          <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
-          <p class="welcome-back-note">
+        <div class="logo">>_</div>
+        <h1>Welcome back</h1>
+        <p class="subtitle">Your environment is ready.</p>
+        <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
+        <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
+        <p class="welcome-back-note">
             Not you? <a href="#" onclick="localStorage.removeItem('${STORAGE_KEY}');location.reload();return false;">Start over</a>
-          </p>
-        `;
-      }
+        </p>
+    `;
     })();
 
     const STEPS = [
@@ -306,56 +344,31 @@
         </div>`;
     }
 
-    async function pollReady(name, status) {
-      const termUrl = `https://learn-${name}.bp31app.com`;
-      const maxAttempts = 40; // ~2 minutes at 3s intervals
-      let attempt = 0;
-
-      // Simulate the provisioning stages with timing
-      status.innerHTML = renderProgress('provision', false);
-
-      const deployTimeout = setTimeout(() => {
-        status.innerHTML = renderProgress('deploy', false);
-      }, 8000);
-
-      while (attempt < maxAttempts) {
-        attempt++;
-        await new Promise(r => setTimeout(r, 3000));
-        try {
-          const res = await fetch(termUrl, { method: 'HEAD', mode: 'no-cors' });
-          // mode: no-cors means we can't read status, but if it doesn't throw, the server responded
-          // Switch to checking with a different approach
-        } catch (e) {
-          // Network error = not ready yet
-          continue;
-        }
-        // If fetch didn't throw, server is responding (could be 200 or other)
-        // Try an actual request to confirm
-        try {
-          const check = await fetch(termUrl, { mode: 'cors' });
-          if (check.ok) {
-            clearTimeout(deployTimeout);
+        function showReady(name, status) {
+            const termUrl = `https://learn-${name}.bp31app.com`;
             status.className = 'status success';
             status.innerHTML = renderProgress('ready', true) + `
-              <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
-              <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
+                <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
+                <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
+                <p style="margin-top:0.75rem;font-size:0.8rem;color:var(--muted)">
+                    If the terminal isn't ready yet, refresh in a moment.
+                </p>
             `;
-            return;
-          }
-        } catch (e) { /* cross-origin, keep polling */ }
-      }
+        }
 
-      // Timeout — show links anyway
-      clearTimeout(deployTimeout);
-      status.className = 'status success';
-      status.innerHTML = renderProgress('ready', true) + `
-        <a href="${termUrl}" target="_blank" class="ready-link">Open Terminal</a><br>
-        <a href="/tasks" target="_blank" class="task-link">View task list &#8594;</a>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:var(--muted)">
-          If the terminal isn't ready yet, refresh in a moment.
-        </p>
-      `;
-    }
+        function animateProgress(name, status) {
+            // 'submit' step is already showing from the form handler.
+            // These timers are relative to POST success:
+            setTimeout(() => {
+                status.innerHTML = renderProgress('provision', false);
+            }, 3000);
+            setTimeout(() => {
+                status.innerHTML = renderProgress('deploy', false);
+            }, 12000);
+            setTimeout(() => {
+                showReady(name, status);
+            }, 45000);
+        }
 
     document.getElementById('signup').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -378,9 +391,9 @@
 
         if (res.ok) {
           const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
-          localStorage.setItem(STORAGE_KEY, clean);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: clean, timestamp: Date.now() }));
           document.getElementById('signup').style.display = 'none';
-          pollReady(clean, status);
+          animateProgress(clean, status);
         } else {
           throw new Error('Provisioning failed — please try again.');
         }
