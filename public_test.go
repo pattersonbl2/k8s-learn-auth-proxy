@@ -137,3 +137,35 @@ func TestPublicUnknownWebhook404(t *testing.T) {
 		t.Fatalf("expected 404 for unknown webhook, got %d", w.Code)
 	}
 }
+
+func TestPublicServesTasksOnTasksHost(t *testing.T) {
+	handler := newPublicHandler("http://localhost:9999")
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "learn-tasks.bp31app.com"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "K8s Learning Tasks") {
+		t.Fatal("tasks host should serve tasks page, not signup")
+	}
+}
+
+func TestPublicServesSignupOnDefaultHost(t *testing.T) {
+	handler := newPublicHandler("http://localhost:9999")
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "learn.bp31app.com"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Sign Up") {
+		t.Fatal("default host should serve signup page")
+	}
+}

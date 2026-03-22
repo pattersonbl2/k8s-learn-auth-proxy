@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,7 +93,11 @@ func newPublicHandler(webhookUpstream string) http.Handler {
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(signupHTML)
+		if strings.HasPrefix(r.Host, "learn-tasks") {
+			w.Write(tasksHTML)
+		} else {
+			w.Write(signupHTML)
+		}
 	})
 
 	mux.HandleFunc("GET /tasks", func(w http.ResponseWriter, r *http.Request) {
