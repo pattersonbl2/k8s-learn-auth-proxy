@@ -3,6 +3,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
+COPY pages/ pages/
 RUN CGO_ENABLED=0 go build -o /auth-proxy .
 
 FROM gcr.io/distroless/static-debian12:nonroot
