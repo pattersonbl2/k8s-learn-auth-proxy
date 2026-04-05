@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"encoding/json"
 	"log"
 	"net"
 	"net/http"
@@ -74,7 +75,12 @@ func (rl *rateLimiter) cleanup() {
 
 // --- Public Handler ---
 
-func newPublicHandler(webhookUpstream string) http.Handler {
+type signupRequest struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func newPublicHandler(webhookUpstream string, provisioner *Provisioner) http.Handler {
 	upstream, err := url.Parse(webhookUpstream)
 	if err != nil {
 		log.Fatalf("invalid webhook upstream URL: %v", err)
@@ -111,8 +117,40 @@ func newPublicHandler(webhookUpstream string) http.Handler {
 			http.Error(w, "Too many requests", http.StatusTooManyRequests)
 			return
 		}
-		r.Host = "n8n.local.bp31app.com"
-		proxy.ServeHTTP(w, r)
+
+		if provisioner == nil {
+			// Fallback: proxy to n8n (for testing without k8s)
+			r.Host = "n8n.local.bp31app.com"
+			proxy.ServeHTTP(w, r)
+			return
+		}
+
+		var req signupRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if req.Name == "" || req.Email == "" {
+			http.Error(w, "name and email are required", http.StatusBadRequest)
+			return
+		}
+
+		result, err := provisioner.Provision(r.Context(), req.Name, req.Email)
+		if err != nil {
+			log.Printf("provisioning failed for %s: %v", req.Name, err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "provisioning failed"})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":  true,
+			"loginUrl": result.LoginURL,
+			"password": result.Password,
+		})
 	})
 
 	mux.HandleFunc("POST /webhook/k8s-learn-help", func(w http.ResponseWriter, r *http.Request) {

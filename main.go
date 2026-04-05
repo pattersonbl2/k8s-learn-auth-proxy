@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 func runHashMode(outPath string) error {
@@ -48,7 +50,7 @@ func runHashMode(outPath string) error {
 func main() {
 	hashMode := flag.Bool("hash", false, "Hash TERM_PASS env var and write to /auth/password-hash")
 	mode := flag.String("mode", "auth", "Server mode: 'auth' (sidecar) or 'public' (signup/tasks)")
-	webhookUpstream := flag.String("webhook-upstream", "http://192.168.50.97:80", "n8n webhook upstream URL")
+	webhookUpstream := flag.String("webhook-upstream", "http://n8n.n8n.svc.cluster.local:5678", "n8n webhook upstream URL")
 	flag.Parse()
 
 	if *hashMode {
@@ -61,7 +63,24 @@ func main() {
 
 	switch *mode {
 	case "public":
-		handler := newPublicHandler(*webhookUpstream)
+		var provisioner *Provisioner
+		if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+			// Running in-cluster — init client-go
+			config, err := rest.InClusterConfig()
+			if err != nil {
+				log.Fatalf("failed to get in-cluster config: %v", err)
+			}
+			clientset, err := kubernetes.NewForConfig(config)
+			if err != nil {
+				log.Fatalf("failed to create k8s client: %v", err)
+			}
+			n8nURL := envOrDefault("N8N_NOTIFICATION_URL", "http://n8n.n8n.svc.cluster.local:5678/webhook/k8s-learn-notification")
+			provisioner = &Provisioner{client: clientset, n8nURL: n8nURL}
+			log.Printf("provisioner initialized (in-cluster, n8n=%s)", n8nURL)
+		} else {
+			log.Printf("not running in-cluster, provisioner disabled (webhook proxy mode)")
+		}
+		handler := newPublicHandler(*webhookUpstream, provisioner)
 		log.Printf("k8s-learn public mode listening on :8080, webhook-upstream=%s", *webhookUpstream)
 		if err := http.ListenAndServe(":8080", handler); err != nil {
 			log.Fatalf("server error: %v", err)
