@@ -45,7 +45,7 @@ func TestRateLimiterPerIP(t *testing.T) {
 }
 
 func TestPublicServesSignupPage(t *testing.T) {
-	handler := newPublicHandler("http://localhost:9999")
+	handler := newPublicHandler("http://localhost:9999", nil)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -60,7 +60,7 @@ func TestPublicServesSignupPage(t *testing.T) {
 }
 
 func TestPublicServesTasksPage(t *testing.T) {
-	handler := newPublicHandler("http://localhost:9999")
+	handler := newPublicHandler("http://localhost:9999", nil)
 
 	req := httptest.NewRequest("GET", "/tasks", nil)
 	w := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestPublicWebhookProxy(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	handler := newPublicHandler(upstream.URL)
+	handler := newPublicHandler(upstream.URL, nil)
 
 	req := httptest.NewRequest("POST", "/webhook/k8s-learn-signup", strings.NewReader(`{"name":"test"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -105,7 +105,7 @@ func TestPublicWebhookRateLimit(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	handler := newPublicHandler(upstream.URL)
+	handler := newPublicHandler(upstream.URL, nil)
 
 	for i := 0; i < 3; i++ {
 		req := httptest.NewRequest("POST", "/webhook/k8s-learn-signup", nil)
@@ -127,7 +127,7 @@ func TestPublicWebhookRateLimit(t *testing.T) {
 }
 
 func TestPublicUnknownWebhook404(t *testing.T) {
-	handler := newPublicHandler("http://localhost:9999")
+	handler := newPublicHandler("http://localhost:9999", nil)
 
 	req := httptest.NewRequest("POST", "/webhook/unknown-path", nil)
 	w := httptest.NewRecorder()
@@ -139,7 +139,7 @@ func TestPublicUnknownWebhook404(t *testing.T) {
 }
 
 func TestPublicServesTasksOnTasksHost(t *testing.T) {
-	handler := newPublicHandler("http://localhost:9999")
+	handler := newPublicHandler("http://localhost:9999", nil)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Host = "learn-tasks.bp31app.com"
@@ -155,7 +155,7 @@ func TestPublicServesTasksOnTasksHost(t *testing.T) {
 }
 
 func TestPublicServesSignupOnDefaultHost(t *testing.T) {
-	handler := newPublicHandler("http://localhost:9999")
+	handler := newPublicHandler("http://localhost:9999", nil)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Host = "learn.bp31app.com"
@@ -171,7 +171,7 @@ func TestPublicServesSignupOnDefaultHost(t *testing.T) {
 }
 
 func TestPublicHealthz(t *testing.T) {
-	handler := newPublicHandler("http://localhost:9999")
+	handler := newPublicHandler("http://localhost:9999", nil)
 
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	w := httptest.NewRecorder()
