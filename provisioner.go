@@ -35,7 +35,7 @@ type Provisioner struct {
 	n8nURL string
 }
 
-func (p *Provisioner) Provision(ctx context.Context, name, email string) (*ProvisionResult, error) {
+func (p *Provisioner) Provision(ctx context.Context, name, email string) (result *ProvisionResult, retErr error) {
 	nsName := "learn-" + name
 	password := generateRandomString(16)
 	token := generateRandomHex(32)
@@ -54,13 +54,24 @@ func (p *Provisioner) Provision(ctx context.Context, name, email string) (*Provi
 	if _, err := p.client.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{}); err != nil {
 		return nil, fmt.Errorf("create namespace: %w", err)
 	}
+	defer func() {
+		if retErr != nil {
+			log.Printf("provisioning failed, cleaning up namespace %s: %v", nsName, retErr)
+			p.client.CoreV1().Namespaces().Delete(context.Background(), nsName, metav1.DeleteOptions{})
+		}
+	}()
 
 	// 2. Create RBAC
 	if err := p.createRBAC(ctx, nsName); err != nil {
 		return nil, fmt.Errorf("create RBAC: %w", err)
 	}
 
-	// 3. Create resource limits
+	// 3. Create network policy
+	if err := p.createNetworkPolicy(ctx, nsName); err != nil {
+		return nil, fmt.Errorf("create network policy: %w", err)
+	}
+
+	// 4. Create resource limits
 	if err := p.createResourceLimits(ctx, nsName); err != nil {
 		return nil, fmt.Errorf("create resource limits: %w", err)
 	}
@@ -224,11 +235,23 @@ func (p *Provisioner) createDeployment(ctx context.Context, nsName, userName str
 						Env: []corev1.EnvVar{{Name: "PATH", Value: "/shared:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}},
 						Ports:   []corev1.ContainerPort{{ContainerPort: 7681}},
 						VolumeMounts: []corev1.VolumeMount{{Name: "shared", MountPath: "/shared"}},
+						SecurityContext: &corev1.SecurityContext{
+							AllowPrivilegeEscalation: boolPtr(false),
+							Capabilities: &corev1.Capabilities{
+								Drop: []corev1.Capability{"ALL"},
+							},
+						},
 					}, {
 						Name:  "auth-proxy",
 						Image: "ghcr.io/pattersonbl2/k8s-learn-auth-proxy:latest",
 						Ports: []corev1.ContainerPort{{ContainerPort: 8080}},
 						VolumeMounts: []corev1.VolumeMount{{Name: "auth", MountPath: "/auth"}},
+						SecurityContext: &corev1.SecurityContext{
+							AllowPrivilegeEscalation: boolPtr(false),
+							Capabilities: &corev1.Capabilities{
+								Drop: []corev1.Capability{"ALL"},
+							},
+						},
 					}},
 					Volumes: []corev1.Volume{
 						{Name: "shared", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
@@ -291,6 +314,55 @@ func (p *Provisioner) createIngress(ctx context.Context, nsName, userName string
 	return err
 }
 
+func (p *Provisioner) createNetworkPolicy(ctx context.Context, nsName string) error {
+	// Default deny all ingress
+	deny := &netv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "default-deny", Namespace: nsName},
+		Spec: netv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeIngress, netv1.PolicyTypeEgress},
+		},
+	}
+	if _, err := p.client.NetworkingV1().NetworkPolicies(nsName).Create(ctx, deny, metav1.CreateOptions{}); err != nil {
+		return err
+	}
+
+	// Allow ingress from traefik + egress to DNS and K8s API
+	allow := &netv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "allow-essential", Namespace: nsName},
+		Spec: netv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeIngress, netv1.PolicyTypeEgress},
+			Ingress: []netv1.NetworkPolicyIngressRule{{
+				From: []netv1.NetworkPolicyPeer{{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"kubernetes.io/metadata.name": "traefik"},
+					},
+				}},
+			}},
+			Egress: []netv1.NetworkPolicyEgressRule{{
+				// DNS
+				Ports: []netv1.NetworkPolicyPort{{
+					Protocol: protocolPtr(corev1.ProtocolUDP),
+					Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
+				}},
+			}, {
+				// K8s API
+				Ports: []netv1.NetworkPolicyPort{{
+					Protocol: protocolPtr(corev1.ProtocolTCP),
+					Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 443},
+				}},
+			}},
+		},
+	}
+	if _, err := p.client.NetworkingV1().NetworkPolicies(nsName).Create(ctx, allow, metav1.CreateOptions{}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func protocolPtr(p corev1.Protocol) *corev1.Protocol { return &p }
+
 func (p *Provisioner) waitForReady(ctx context.Context, nsName string) error {
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
@@ -330,3 +402,5 @@ func generateRandomHex(length int) string {
 	rand.Read(b)
 	return hex.EncodeToString(b)
 }
+
+func boolPtr(b bool) *bool { return &b }

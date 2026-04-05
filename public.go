@@ -8,12 +8,16 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
+
+var validName = regexp.MustCompile(`^[a-z][a-z0-9]{1,19}$`)
+var reservedNames = map[string]bool{"tasks": true, "public": true, "signup": true, "api": true, "admin": true, "webhook": true}
 
 //go:embed pages/signup.html
 var signupHTML []byte
@@ -136,6 +140,16 @@ func newPublicHandler(webhookUpstream string, provisioner *Provisioner) http.Han
 			return
 		}
 
+		req.Name = strings.ToLower(req.Name)
+		if !validName.MatchString(req.Name) {
+			http.Error(w, `{"error":"invalid name: lowercase letters and digits only, 2-20 chars, must start with letter"}`, http.StatusBadRequest)
+			return
+		}
+		if reservedNames[req.Name] {
+			http.Error(w, `{"error":"this name is reserved"}`, http.StatusBadRequest)
+			return
+		}
+
 		result, err := provisioner.Provision(r.Context(), req.Name, req.Email)
 		if err != nil {
 			log.Printf("provisioning failed for %s: %v", req.Name, err)
@@ -149,7 +163,6 @@ func newPublicHandler(webhookUpstream string, provisioner *Provisioner) http.Han
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":  true,
 			"loginUrl": result.LoginURL,
-			"password": result.Password,
 		})
 	})
 
