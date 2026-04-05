@@ -219,7 +219,9 @@ func (p *Provisioner) createDeployment(ctx context.Context, nsName, userName str
 					Containers: []corev1.Container{{
 						Name:    "ttyd",
 						Image:   "tsl0922/ttyd:latest",
-						Args:    []string{"--port", "7681", "--writable", "/shared/kubectl", "exec", "-it", "bash"},
+						Command: []string{"ttyd"},
+						Args:    []string{"--port", "7681", "--writable", "bash"},
+						Env: []corev1.EnvVar{{Name: "PATH", Value: "/shared:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}},
 						Ports:   []corev1.ContainerPort{{ContainerPort: 7681}},
 						VolumeMounts: []corev1.VolumeMount{{Name: "shared", MountPath: "/shared"}},
 					}, {
