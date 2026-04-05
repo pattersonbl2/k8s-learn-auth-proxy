@@ -47,7 +47,7 @@ func (p *Provisioner) Provision(ctx context.Context, name, email string) (*Provi
 			Labels: map[string]string{
 				"managed-by":                           "k8s-learn",
 				"pod-security.kubernetes.io/enforce":    "baseline",
-				"created-at":                            time.Now().UTC().Format(time.RFC3339),
+				"created-at":                            time.Now().UTC().Format("20060102T150405Z"),
 			},
 		},
 	}
