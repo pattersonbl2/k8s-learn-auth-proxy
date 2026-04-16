@@ -462,6 +462,20 @@ kubectl rollout history deployment/myapp</code></pre>
   </div>
 
   <script>
+    // Derive username and namespace from ?name= URL param
+    const urlParams = new URLSearchParams(window.location.search);
+    const userName = urlParams.get('name') || '';
+    const namespace = userName ? `learn-${userName}` : '';
+
+    // Fill [name] placeholder spans with the actual username
+    if (userName) {
+      document.querySelectorAll('.placeholder').forEach(el => {
+        if (el.textContent === '[name]') el.textContent = userName;
+      });
+      const footer = document.querySelector('footer');
+      if (footer) footer.innerHTML = footer.innerHTML.replace('[name]', `<strong>${namespace}</strong>`).replace('[name]', userName);
+    }
+
     const helpBtn = document.getElementById('helpBtn');
     const helpBox = document.getElementById('helpBox');
     const helpInput = document.getElementById('helpInput');
@@ -498,7 +512,7 @@ kubectl rollout history deployment/myapp</code></pre>
         const res = await fetch('/webhook/k8s-learn-help', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: q })
+          body: JSON.stringify({ question: q, namespace: namespace })
         });
         if (res.status === 429) {
           helpAnswer.textContent = 'Slow down, try again in a moment.';
