@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type ProvisionResult struct {
@@ -76,12 +75,10 @@ func (p *Provisioner) Provision(ctx context.Context, name, email string) (result
 		return nil, fmt.Errorf("create resource limits: %w", err)
 	}
 
-	// 4. Create auth secret
-	hashBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("bcrypt hash: %w", err)
-	}
-	if err := p.createAuthSecret(ctx, nsName, string(hashBytes), token); err != nil {
+	// 4. Create auth secret. The password is stored in plaintext here; the
+	// hash-password init container (see createDeployment) is the only place
+	// that hashes it, writing the result to the pod's /auth/password-hash.
+	if err := p.createAuthSecret(ctx, nsName, password, token); err != nil {
 		return nil, fmt.Errorf("create auth secret: %w", err)
 	}
 
@@ -182,12 +179,12 @@ func (p *Provisioner) createResourceLimits(ctx context.Context, nsName string) e
 	return nil
 }
 
-func (p *Provisioner) createAuthSecret(ctx context.Context, nsName, passHash, token string) error {
+func (p *Provisioner) createAuthSecret(ctx context.Context, nsName, plaintextPassword, token string) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "ttyd-auth", Namespace: nsName},
 		StringData: map[string]string{
-			"TERM_PASS_HASH": passHash,
-			"SIGNUP_TOKEN":   token,
+			"TERM_PASS":    plaintextPassword,
+			"SIGNUP_TOKEN": token,
 		},
 	}
 	_, err := p.client.CoreV1().Secrets(nsName).Create(ctx, secret, metav1.CreateOptions{})
@@ -218,9 +215,14 @@ func (p *Provisioner) createDeployment(ctx context.Context, nsName, userName str
 							Name: "TERM_PASS", ValueFrom: &corev1.EnvVarSource{
 								SecretKeyRef: &corev1.SecretKeySelector{
 									LocalObjectReference: corev1.LocalObjectReference{Name: "ttyd-auth"},
-									Key:                  "TERM_PASS_HASH",
+									Key:                  "TERM_PASS",
 								},
 							},
+						}, {
+							// The ttyd-auth Secret is mounted at /auth-secret,
+							// where each key becomes a file of the same name
+							// (see createAuthSecret's "SIGNUP_TOKEN" key).
+							Name: "AUTH_SECRET_TOKEN_PATH", Value: "/auth-secret/SIGNUP_TOKEN",
 						}},
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "auth", MountPath: "/auth"},

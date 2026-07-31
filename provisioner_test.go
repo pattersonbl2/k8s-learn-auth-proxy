@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clienttesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/kubernetes/fake"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // fakeReadyClient returns a fake clientset where any deployment Get
@@ -140,11 +144,120 @@ func TestProvisionCreatesAuthSecret(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Secret not created: %v", err)
 	}
-	if _, ok := secret.StringData["TERM_PASS_HASH"]; !ok {
-		t.Error("secret missing TERM_PASS_HASH")
+	if _, ok := secret.StringData["TERM_PASS"]; !ok {
+		t.Error("secret missing TERM_PASS")
 	}
 	if _, ok := secret.StringData["SIGNUP_TOKEN"]; !ok {
 		t.Error("secret missing SIGNUP_TOKEN")
+	}
+}
+
+// findInitContainer returns the named init container from a deployment spec, or nil.
+func findInitContainer(dep *appsv1.Deployment, name string) *corev1.Container {
+	for i := range dep.Spec.Template.Spec.InitContainers {
+		if dep.Spec.Template.Spec.InitContainers[i].Name == name {
+			return &dep.Spec.Template.Spec.InitContainers[i]
+		}
+	}
+	return nil
+}
+
+// TestProvisionedPasswordValidatesAfterHashing reproduces the reported login
+// bug end-to-end: it reads the exact secret value the deployment wires into
+// the hash-password init container's TERM_PASS env var, runs it through the
+// real runHashMode (the init container's actual code), and checks the
+// resulting hash validates against the plaintext password that gets emailed
+// to the user. If the secret already holds a bcrypt hash, runHashMode hashes
+// it a second time and this must fail.
+func TestProvisionedPasswordValidatesAfterHashing(t *testing.T) {
+	client := fakeReadyClient()
+	p := &Provisioner{client: client, n8nURL: "http://localhost:9999/webhook/k8s-learn-notification"}
+
+	result, err := p.Provision(context.Background(), "testuser", "test@example.com")
+	if err != nil {
+		t.Fatalf("Provision failed: %v", err)
+	}
+
+	dep, err := client.AppsV1().Deployments("learn-testuser").Get(context.Background(), "ttyd", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Deployment not created: %v", err)
+	}
+	hashInit := findInitContainer(dep, "hash-password")
+	if hashInit == nil {
+		t.Fatal("hash-password init container not found")
+	}
+
+	var secretKey string
+	for _, e := range hashInit.Env {
+		if e.Name == "TERM_PASS" && e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
+			secretKey = e.ValueFrom.SecretKeyRef.Key
+		}
+	}
+	if secretKey == "" {
+		t.Fatal("hash-password init container has no TERM_PASS env var backed by a SecretKeyRef")
+	}
+
+	secret, err := client.CoreV1().Secrets("learn-testuser").Get(context.Background(), "ttyd-auth", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Secret not created: %v", err)
+	}
+	secretVal, ok := secret.StringData[secretKey]
+	if !ok {
+		t.Fatalf("secret missing key %q referenced by TERM_PASS env var", secretKey)
+	}
+
+	dir := t.TempDir()
+	outPath := filepath.Join(dir, "password-hash")
+	t.Setenv("TERM_PASS", secretVal)
+	if err := runHashMode(outPath); err != nil {
+		t.Fatalf("runHashMode failed: %v", err)
+	}
+
+	hashBytes, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("reading hash output: %v", err)
+	}
+
+	if err := bcrypt.CompareHashAndPassword(hashBytes, []byte(result.Password)); err != nil {
+		t.Fatalf("emailed password %q does not validate against the deployed password hash: %v", result.Password, err)
+	}
+}
+
+// TestHashPasswordInitContainerTokenPathMatchesSecretKey reproduces a second
+// login bug: the Secret volume mounts each StringData key as a file of the
+// same name (the token is stored under key SIGNUP_TOKEN, see
+// createAuthSecret), but the init container must be explicitly told that
+// filename via AUTH_SECRET_TOKEN_PATH, or main.go's default
+// ("/auth-secret/token") never matches and the token copy silently no-ops —
+// breaking the one-time login link for every user.
+func TestHashPasswordInitContainerTokenPathMatchesSecretKey(t *testing.T) {
+	client := fakeReadyClient()
+	p := &Provisioner{client: client, n8nURL: "http://localhost:9999/webhook/k8s-learn-notification"}
+
+	_, err := p.Provision(context.Background(), "testuser", "test@example.com")
+	if err != nil {
+		t.Fatalf("Provision failed: %v", err)
+	}
+
+	dep, err := client.AppsV1().Deployments("learn-testuser").Get(context.Background(), "ttyd", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Deployment not created: %v", err)
+	}
+	hashInit := findInitContainer(dep, "hash-password")
+	if hashInit == nil {
+		t.Fatal("hash-password init container not found")
+	}
+
+	var tokenPathEnv string
+	for _, e := range hashInit.Env {
+		if e.Name == "AUTH_SECRET_TOKEN_PATH" {
+			tokenPathEnv = e.Value
+		}
+	}
+
+	const wantSuffix = "/SIGNUP_TOKEN"
+	if !strings.HasSuffix(tokenPathEnv, wantSuffix) {
+		t.Fatalf("hash-password init container AUTH_SECRET_TOKEN_PATH = %q, want a path ending in %q to match the secret's actual SIGNUP_TOKEN key", tokenPathEnv, wantSuffix)
 	}
 }
 
