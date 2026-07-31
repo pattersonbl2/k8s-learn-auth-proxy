@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -154,6 +155,11 @@ func newPublicHandler(webhookUpstream string, provisioner *Provisioner) http.Han
 		if err != nil {
 			log.Printf("provisioning failed for %s: %v", req.Name, err)
 			w.Header().Set("Content-Type", "application/json")
+			if errors.Is(err, ErrAtCapacity) {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				json.NewEncoder(w).Encode(map[string]string{"error": "k8s-learn is at capacity, please try again shortly"})
+				return
+			}
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": "provisioning failed"})
 			return

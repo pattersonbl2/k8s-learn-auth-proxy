@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	clienttesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/kubernetes/fake"
@@ -258,6 +260,75 @@ func TestHashPasswordInitContainerTokenPathMatchesSecretKey(t *testing.T) {
 	const wantSuffix = "/SIGNUP_TOKEN"
 	if !strings.HasSuffix(tokenPathEnv, wantSuffix) {
 		t.Fatalf("hash-password init container AUTH_SECRET_TOKEN_PATH = %q, want a path ending in %q to match the secret's actual SIGNUP_TOKEN key", tokenPathEnv, wantSuffix)
+	}
+}
+
+// TestCreateResourceLimitsQuotaSizedForConcurrentLearners checks the
+// per-learner ResourceQuota is tight enough that 40 concurrent learners
+// can't exceed the homelab's real capacity, while still leaving room for a
+// learner to spin up a couple of their own test pods.
+func TestCreateResourceLimitsQuotaSizedForConcurrentLearners(t *testing.T) {
+	client := fakeReadyClient()
+	p := &Provisioner{client: client, n8nURL: "http://localhost:9999/webhook/k8s-learn-notification"}
+
+	if err := p.createResourceLimits(context.Background(), "learn-testuser"); err != nil {
+		t.Fatalf("createResourceLimits failed: %v", err)
+	}
+
+	rq, err := client.CoreV1().ResourceQuotas("learn-testuser").Get(context.Background(), "user-quota", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("ResourceQuota not created: %v", err)
+	}
+
+	wantCPU := resource.MustParse("300m")
+	wantMem := resource.MustParse("384Mi")
+	wantPods := resource.MustParse("6")
+
+	if got := rq.Spec.Hard[corev1.ResourceRequestsCPU]; got.Cmp(wantCPU) != 0 {
+		t.Errorf("requests.cpu = %s, want %s", got.String(), wantCPU.String())
+	}
+	if got := rq.Spec.Hard[corev1.ResourceRequestsMemory]; got.Cmp(wantMem) != 0 {
+		t.Errorf("requests.memory = %s, want %s", got.String(), wantMem.String())
+	}
+	if got := rq.Spec.Hard[corev1.ResourcePods]; got.Cmp(wantPods) != 0 {
+		t.Errorf("pods = %s, want %s", got.String(), wantPods.String())
+	}
+}
+
+// TestProvisionRejectsWhenAtCapacity reproduces the "unbounded signups" gap:
+// nothing today stops more than N concurrent learners from being
+// provisioned, which combined with per-namespace quota could exceed
+// available homelab capacity.
+func TestProvisionRejectsWhenAtCapacity(t *testing.T) {
+	client := fakeReadyClient()
+	p := &Provisioner{client: client, n8nURL: "http://localhost:9999/webhook/k8s-learn-notification", maxActiveLearners: 2}
+
+	for i := 0; i < 2; i++ {
+		if _, err := p.Provision(context.Background(), fmt.Sprintf("user%d", i), fmt.Sprintf("user%d@example.com", i)); err != nil {
+			t.Fatalf("Provision %d failed: %v", i, err)
+		}
+	}
+
+	if _, err := p.Provision(context.Background(), "onemore", "onemore@example.com"); err == nil {
+		t.Fatal("expected Provision to fail once at capacity")
+	}
+
+	if _, err := client.CoreV1().Namespaces().Get(context.Background(), "learn-onemore", metav1.GetOptions{}); err == nil {
+		t.Error("namespace should not have been created when at capacity")
+	}
+}
+
+// TestProvisionUnlimitedWhenCapacityUnset preserves the zero-value default:
+// existing tests and callers that don't set maxActiveLearners must keep
+// working with no cap enforced.
+func TestProvisionUnlimitedWhenCapacityUnset(t *testing.T) {
+	client := fakeReadyClient()
+	p := &Provisioner{client: client, n8nURL: "http://localhost:9999/webhook/k8s-learn-notification"}
+
+	for i := 0; i < 5; i++ {
+		if _, err := p.Provision(context.Background(), fmt.Sprintf("user%d", i), fmt.Sprintf("user%d@example.com", i)); err != nil {
+			t.Fatalf("Provision %d failed: %v", i, err)
+		}
 	}
 }
 

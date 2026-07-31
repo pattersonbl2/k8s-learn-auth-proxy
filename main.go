@@ -75,8 +75,14 @@ func main() {
 				log.Fatalf("failed to create k8s client: %v", err)
 			}
 			n8nURL := envOrDefault("N8N_NOTIFICATION_URL", "http://n8n.n8n.svc.cluster.local:5678/webhook/k8s-learn-notification")
-			provisioner = &Provisioner{client: clientset, n8nURL: n8nURL}
-			log.Printf("provisioner initialized (in-cluster, n8n=%s)", n8nURL)
+			maxActiveLearners := 40
+			if v := os.Getenv("MAX_ACTIVE_LEARNERS"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil {
+					maxActiveLearners = n
+				}
+			}
+			provisioner = &Provisioner{client: clientset, n8nURL: n8nURL, maxActiveLearners: maxActiveLearners}
+			log.Printf("provisioner initialized (in-cluster, n8n=%s, maxActiveLearners=%d)", n8nURL, maxActiveLearners)
 		} else {
 			log.Printf("not running in-cluster, provisioner disabled (webhook proxy mode)")
 		}
