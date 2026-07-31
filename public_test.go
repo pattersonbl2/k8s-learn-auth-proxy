@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -167,6 +168,28 @@ func TestPublicServesSignupOnDefaultHost(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "Sign Up") {
 		t.Fatal("default host should serve signup page")
+	}
+}
+
+// TestPublicSignupReturns503WhenAtCapacity ensures a full signup queue is
+// surfaced to the caller as "service busy, try later" (503), not a generic
+// 500 that looks like a provisioning bug.
+func TestPublicSignupReturns503WhenAtCapacity(t *testing.T) {
+	client := fakeReadyClient()
+	p := &Provisioner{client: client, n8nURL: "http://localhost:9999/webhook/k8s-learn-notification", maxActiveLearners: 1}
+
+	if _, err := p.Provision(context.Background(), "first", "first@example.com"); err != nil {
+		t.Fatalf("first Provision failed: %v", err)
+	}
+
+	handler := newPublicHandler("http://localhost:9999", p)
+
+	req := httptest.NewRequest("POST", "/webhook/k8s-learn-signup", strings.NewReader(`{"name":"second","email":"second@example.com"}`))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

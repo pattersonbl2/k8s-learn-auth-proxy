@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -32,9 +33,38 @@ type ProvisionResult struct {
 type Provisioner struct {
 	client kubernetes.Interface
 	n8nURL string
+	// maxActiveLearners caps concurrent learn-* namespaces. Zero means
+	// unlimited (the default for zero-value/test Provisioners).
+	maxActiveLearners int
+}
+
+const managedByLabelSelector = "managed-by=k8s-learn"
+
+// ErrAtCapacity is returned by Provision when maxActiveLearners active
+// learner namespaces already exist. Callers can errors.Is against it to
+// distinguish "server full" from a real provisioning failure.
+var ErrAtCapacity = errors.New("k8s-learn: at capacity")
+
+// atCapacity reports whether the number of currently active learner
+// namespaces has reached maxActiveLearners.
+func (p *Provisioner) atCapacity(ctx context.Context) (bool, error) {
+	if p.maxActiveLearners <= 0 {
+		return false, nil
+	}
+	list, err := p.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: managedByLabelSelector})
+	if err != nil {
+		return false, fmt.Errorf("list active learner namespaces: %w", err)
+	}
+	return len(list.Items) >= p.maxActiveLearners, nil
 }
 
 func (p *Provisioner) Provision(ctx context.Context, name, email string) (result *ProvisionResult, retErr error) {
+	if full, err := p.atCapacity(ctx); err != nil {
+		return nil, fmt.Errorf("check capacity: %w", err)
+	} else if full {
+		return nil, fmt.Errorf("%w: %d active learners", ErrAtCapacity, p.maxActiveLearners)
+	}
+
 	nsName := "learn-" + name
 	password := generateRandomString(16)
 	token := generateRandomHex(32)
@@ -167,9 +197,9 @@ func (p *Provisioner) createResourceLimits(ctx context.Context, nsName string) e
 		ObjectMeta: metav1.ObjectMeta{Name: "user-quota", Namespace: nsName},
 		Spec: corev1.ResourceQuotaSpec{
 			Hard: corev1.ResourceList{
-				corev1.ResourcePods:            resource.MustParse("10"),
-				corev1.ResourceRequestsCPU:     resource.MustParse("1"),
-				corev1.ResourceRequestsMemory:  resource.MustParse("1Gi"),
+				corev1.ResourcePods:           resource.MustParse("6"),
+				corev1.ResourceRequestsCPU:    resource.MustParse("300m"),
+				corev1.ResourceRequestsMemory: resource.MustParse("384Mi"),
 			},
 		},
 	}
